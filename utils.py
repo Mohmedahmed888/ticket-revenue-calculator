@@ -12,6 +12,7 @@ class Database:
         try:
             self.conn = sqlite3.connect(db_name)
             self.create_tables()
+            self._insert_sample_data()  # Add sample data if table is empty
         except Exception as e:
             messagebox.showerror("Database Error", f"Failed to initialize database: {str(e)}")
             self.conn = None
@@ -44,6 +45,37 @@ class Database:
             self.conn.commit()
         except Exception as e:
             messagebox.showerror("Database Error", f"Failed to create tables: {str(e)}")
+
+    def _insert_sample_data(self):
+        """Insert sample data if the table is empty"""
+        try:
+            cursor = self.conn.cursor()
+            # Check if table is empty
+            cursor.execute("SELECT COUNT(*) FROM revenue_history")
+            count = cursor.fetchone()[0]
+            
+            if count == 0:
+                # Insert sample data
+                sample_data = [
+                    (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                     "100, 80, 60", 5, 400, "Dynamic Programming", 0.002),
+                    (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                     "150, 120, 90", 8, 960, "Greedy", 0.001),
+                    (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                     "200, 150, 100", 10, 1500, "Brute Force", 0.003)
+                ]
+                
+                cursor.executemany('''
+                    INSERT INTO revenue_history 
+                    (date, prices, tickets, revenue, method, duration)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', sample_data)
+                
+                self.conn.commit()
+                print("Sample data inserted successfully")
+        except Exception as e:
+            print(f"Error inserting sample data: {e}")
+            # Don't show error message to user as this is not critical
 
     def save_result(self, timestamp, prices_str, tickets, revenue, method, duration):
         """Save calculation result to the revenue_history table."""

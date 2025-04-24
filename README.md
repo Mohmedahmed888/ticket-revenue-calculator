@@ -20,14 +20,16 @@ A desktop application using Python and `customtkinter` to calculate maximum tick
 
 ```
 ticket-revenue-calculator/
-├── main.py           # Application entry point
-├── views.py          # GUI components (Main Window, Tabs)
-├── algorithms.py     # Revenue calculation algorithm implementations
-├── models.py         # Data structures (Placeholder)
-├── utils.py          # Helper classes (Database, SoundManager)
-├── requirements.txt  # Python package dependencies
-├── ticket_revenue.db # SQLite database file
-└── README.md         # This file
+├── app/              # Core application package
+│   └── gui/         # GUI components and views
+│       └── results_tab.py  # Results tab implementation
+├── main.py          # Application entry point
+├── algorithms.py    # Revenue calculation algorithm implementations
+├── models.py        # Data structures (Placeholder)
+├── utils.py         # Helper classes (Database, SoundManager)
+├── requirements.txt # Python package dependencies
+├── ticket_revenue.db# SQLite database file
+└── README.md        # This file
 ```
 
 ## Setup & Run

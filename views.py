@@ -9,6 +9,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import pandas as pd
 import numpy as np
+import sys
+import winsound # For playing sounds on Windows
 
 # --- Calculator Tab ---
 
@@ -318,8 +320,8 @@ class AnalyticsTab:
             
             # --- Configure colors based on theme --- 
             mode = ctk.get_appearance_mode().lower()
-            bg_color = "#2b2b2b" if mode == "dark" else "#ebebeb"
-            text_color = "white" if mode == "dark" else "black"
+            bg_color = '#FAFAFA' if mode == 'light' else '#2B2B2B' # Light/Dark background
+            text_color = 'black' if mode == 'light' else 'white'
             self.fig.patch.set_facecolor(bg_color)
             self.ax1.set_facecolor(bg_color) 
             self.ax2.set_facecolor(bg_color)
@@ -342,11 +344,15 @@ class AnalyticsTab:
             # --- Plot 1: Price Distribution Pie Chart --- 
             unique_prices = sorted(list(set(prices)), reverse=True)
             price_counts = [prices.count(p) for p in unique_prices]
-            pie_colors = plt.cm.Pastel1(np.linspace(0, 1, len(unique_prices))) 
+            cmap = plt.get_cmap('tab10')
+            pie_colors = cmap(np.linspace(0, 1, len(price_counts)))
             
             wedges, texts, autotexts = self.ax1.pie(price_counts, 
                        labels=[f"${p}" for p in unique_prices],
                        autopct='%1.1f%%',
+                       startangle=90,
+                       pctdistance=0.85,
+                       labeldistance=1.1,
                        colors=pie_colors,
                        textprops={'color': text_color}) 
             self.ax1.set_title('Price Distribution', pad=20, fontsize=12, fontweight='bold')
@@ -430,17 +436,18 @@ class HistoryTab:
     def __init__(self, parent, app):
         self.parent = parent
         self.app = app
+        self.row_widgets = []
         self.create_widgets()
-        self.load_history_data() # Load initial history
+        self.load_history_data()
 
     def create_widgets(self):
         main_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         title_label = ctk.CTkLabel(main_frame, text="Calculation History", font=ctk.CTkFont(size=24, weight="bold"))
-        title_label.pack(pady=(0, 20))
+        title_label.pack(pady=(0, 15))
 
-        # Frame for buttons
+        # --- Buttons --- 
         btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         btn_frame.pack(fill="x", pady=(0, 10))
         button_style = {"font": ctk.CTkFont(size=13), "width": 120, "height": 32}
@@ -451,64 +458,166 @@ class HistoryTab:
         clear_btn = ctk.CTkButton(btn_frame, text="Clear History", command=self.clear_history, **button_style)
         clear_btn.pack(side="left", padx=5)
 
-        # Use CTkTextbox for history display (as in previous version)
-        self.history_textbox = ctk.CTkTextbox(main_frame, font=("Courier New", 12), wrap="none")
-        self.history_textbox.pack(fill="both", expand=True, padx=10, pady=10)
-        self.history_textbox.configure(state="disabled") # Make read-only
+        # --- Table Container ---
+        self.table_container = ctk.CTkFrame(main_frame, fg_color="transparent")
+        self.table_container.pack(fill="both", expand=True, padx=10)
+
+        # --- Header Row --- 
+        self.header_frame = ctk.CTkFrame(self.table_container, fg_color=self._get_header_color())
+        self.header_frame.pack(fill="x", pady=(0, 1))
+
+        # Column configuration with fixed widths
+        self.column_config = {
+            "Timestamp": {"width": 180, "weight": 3},
+            "Revenue": {"width": 120, "weight": 2},
+            "Method": {"width": 120, "weight": 2},
+            "Tickets": {"width": 80, "weight": 1},
+            "Duration (s)": {"width": 100, "weight": 1},
+            "Prices Used": {"width": 200, "weight": 3}
+        }
+
+        # Create header cells
+        for i, (col_name, config) in enumerate(self.column_config.items()):
+            header_cell = ctk.CTkFrame(self.header_frame, fg_color="transparent", height=40)
+            header_cell.grid(row=0, column=i, sticky="nsew", padx=1)
+            header_cell.grid_propagate(False)
+            
+            label = ctk.CTkLabel(
+                header_cell,
+                text=col_name,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color="white",
+                anchor="center"
+            )
+            label.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Configure header frame columns
+        for i, config in enumerate(self.column_config.values()):
+            self.header_frame.grid_columnconfigure(i, weight=config["weight"], minsize=config["width"])
+
+        # --- Scrollable Frame for Data Rows --- 
+        self.scrollable_frame = ctk.CTkScrollableFrame(self.table_container, fg_color="transparent")
+        self.scrollable_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        # Configure scrollable frame columns
+        for i, config in enumerate(self.column_config.values()):
+            self.scrollable_frame.grid_columnconfigure(i, weight=config["weight"], minsize=config["width"])
+
+        # Placeholder label
+        self.no_data_label = ctk.CTkLabel(
+            self.scrollable_frame,
+            text="No historical records available.",
+            text_color="gray",
+            font=ctk.CTkFont(size=12)
+        )
+
+    def _get_row_colors(self):
+        mode = ctk.get_appearance_mode()
+        if mode == "Dark":
+            return ("#2b2b2b", "#333333")
+        else:
+            return ("#f5f5f5", "#ffffff")
+
+    def _get_header_color(self):
+        mode = ctk.get_appearance_mode()
+        return "#1f538d" if mode == "Dark" else "#2c7be5"
+        
+    def _get_text_color(self, element_type="data"):
+        mode = ctk.get_appearance_mode()
+        if element_type == "header":
+            return "white"
+        else:
+            return "white" if mode == "Dark" else "black"
+
+    def _clear_rows(self):
+        """Clears existing data rows from the scrollable frame."""
+        for widget in self.row_widgets:
+            widget.destroy()
+        self.row_widgets = []
+        self.no_data_label.pack_forget() # Hide 'no data' label if it was visible
 
     def load_history_data(self):
-        """Load data from DB and display in the Textbox."""
-        print("Attempting to load history...")
+        self._clear_rows()
+        
         try:
             results = self.app.db.get_results()
-            print(f"Fetched {len(results)} records from DB.")
-            
-            self.history_textbox.configure(state="normal")
-            self.history_textbox.delete("1.0", "end")
-
             if not results:
-                self.history_textbox.insert("1.0", "No historical records available.")
-                print("No records found or returned from DB.")
-            else:
-                header = f"{"Timestamp":<22} {"Revenue":>15} {"Method":<20} {"Tickets":>8} {"Duration":>10} {"Prices"}\n"
-                separator = "-" * 110 + "\n"
-                self.history_textbox.insert("end", header)
-                self.history_textbox.insert("end", separator)
+                self.no_data_label.pack(pady=20)
+                return
 
-                for i, row in enumerate(results):
-                    try:
-                        timestamp, prices, tickets, revenue, method, duration = row
-                        formatted_ts = timestamp[:19]
-                        formatted_revenue = f"{revenue:,}"
-                        formatted_duration = f"{duration:.2f}s"
-                        line = f"{formatted_ts:<22} {formatted_revenue:>15} {method.replace('_', ' ').title():<20} {tickets:>8} {formatted_duration:>10} {prices}\n"
-                        self.history_textbox.insert("end", line)
-                    except Exception as fmt_e:
-                        print(f"Error formatting/inserting row {i}: {row} -> {fmt_e}")
-                        self.history_textbox.insert("end", f"Error displaying record: {row}\n")
+            even_color, odd_color = self._get_row_colors()
+            text_color = self._get_text_color("data")
 
-            self.history_textbox.configure(state="disabled")
-            print("History load complete.")
+            for i, row in enumerate(results):
+                row_frame = ctk.CTkFrame(
+                    self.scrollable_frame,
+                    fg_color=even_color if i % 2 == 0 else odd_color,
+                    height=35
+                )
+                row_frame.pack(fill="x", pady=1)
+                self.row_widgets.append(row_frame)
+
+                # Configure row columns
+                for col_idx, config in enumerate(self.column_config.values()):
+                    row_frame.grid_columnconfigure(col_idx, weight=config["weight"], minsize=config["width"])
+
+                try:
+                    timestamp, prices, tickets, revenue, method, duration = row
+                    
+                    # Format the data
+                    formatted_data = [
+                        timestamp[:19],
+                        f"{revenue:,}",
+                        method.replace('_', ' ').title(),
+                        str(tickets),
+                        f"{duration:.2f}" if isinstance(duration, (int, float)) else "-",
+                        str(prices) if prices is not None else ""
+                    ]
+
+                    # Create cells for each column
+                    for col_idx, value in enumerate(formatted_data):
+                        cell_frame = ctk.CTkFrame(row_frame, fg_color="transparent", height=35)
+                        cell_frame.grid(row=0, column=col_idx, sticky="nsew", padx=1)
+                        cell_frame.grid_propagate(False)
+                        
+                        label = ctk.CTkLabel(
+                            cell_frame,
+                            text=value,
+                            font=ctk.CTkFont(size=11),
+                            text_color=text_color,
+                            anchor="center"
+                        )
+                        label.place(relx=0.5, rely=0.5, anchor="center")
+
+                except Exception as fmt_e:
+                    error_label = ctk.CTkLabel(
+                        row_frame,
+                        text=f"Error displaying row: {fmt_e}",
+                        text_color="red",
+                        anchor="w",
+                        padx=5
+                    )
+                    error_label.grid(row=0, column=0, columnspan=6, sticky="ew")
+
         except Exception as e:
-            print(f"Exception during history load: {str(e)}")
             messagebox.showerror("History Error", f"Failed to load history: {str(e)}")
             self.app.sound_manager.play_sound("error")
-            try:
-                self.history_textbox.configure(state="normal")
-                self.history_textbox.delete("1.0", "end")
-                self.history_textbox.insert("1.0", f"Error loading history: {e}")
-                self.history_textbox.configure(state="disabled")
-            except: pass
+            self._clear_rows()
+            self.no_data_label.configure(text=f"Error loading history: {e}", text_color="red")
+            self.no_data_label.pack(pady=20)
 
     def export_to_excel(self):
-        """Export history data to an Excel file."""
         try:
             results = self.app.db.get_results(limit=10000) # Get all results for export
             if not results:
                 messagebox.showwarning("No Data", "No records to export.")
                 return
 
-            df = pd.DataFrame(results, columns=["Date", "Prices", "Tickets", "Revenue", "Method", "Duration"])
+            # Ensure consistent column order/names with the database fetch
+            df = pd.DataFrame(results, columns=["Timestamp", "Prices", "Tickets", "Revenue", "Method", "Duration"])
+            # Reorder DF columns to match Treeview/Excel output preference if desired
+            df = df[["Timestamp", "Revenue", "Method", "Tickets", "Duration", "Prices"]]
+
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
                 filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")],
@@ -526,8 +635,7 @@ class HistoryTab:
             self.app.sound_manager.play_sound("error")
 
     def clear_history(self):
-        """Clear all records from the history database."""
-        if messagebox.askyesno("Confirm", "Are you sure you want to delete all historical records?"):           
+        if messagebox.askyesno("Confirm", "Are you sure you want to delete all historical records?"):
             success = self.app.db.clear_all_history()
             if success:
                 self.load_history_data() # Refresh display
@@ -535,7 +643,7 @@ class HistoryTab:
                 self.app.sound_manager.play_sound("success")
                 # Optionally update analytics as well
                 if hasattr(self.app, 'analytics_tab_instance'):
-                    self.app.analytics_tab_instance.update_plot()
+                    self.app.analytics_tab_instance.update_plot() # Refresh analytics plot
             # Error messages are handled within db.clear_all_history
 
 # --- Settings Tab ---
@@ -605,7 +713,10 @@ class SettingsTab:
         # Update plot colors if analytics tab exists and is initialized
         if hasattr(self.app, 'analytics_tab_instance') and self.app.analytics_tab_instance.fig:
             self.app.analytics_tab_instance.update_plot()
-        
+        # Update history table style - NOW HANDLED WITHIN load_history_data
+        # if hasattr(self.app, 'history_tab_instance'):
+        #     self.app.history_tab_instance.apply_style() # REMOVED
+
     def toggle_sound(self):
         """Called when the Checkbox state changes."""
         is_enabled = self.sound_var.get()
@@ -616,7 +727,7 @@ class SettingsTab:
 class TicketRevenueApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
+        print("TicketRevenueApp: Initializing...")
         self.title("Ticket Revenue Calculator")
         self.geometry("1200x800")
         self.minsize(1000, 700)
@@ -765,7 +876,7 @@ class TicketRevenueApp(ctk.CTk):
                 self.db.close()
         except Exception as e:
              print(f"Error closing database during close: {e}")
-            
+
         # Close Matplotlib figures
         try:
             print("Closing matplotlib plots...") # Debug
