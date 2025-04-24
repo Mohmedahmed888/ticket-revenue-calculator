@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from views import TicketRevenueApp
 
 def main():
-    # Set appearance mode and default color theme
+    # Set initial appearance (can be overridden by settings loaded from DB in TicketRevenueApp)
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     
@@ -12,9 +12,16 @@ def main():
     app.mainloop()
 
 if __name__ == "__main__":
-    main()
     try:
-        # Close all remaining windows
-        plt.close('all')
-    except:
-        pass
+        main()
+    except Exception as e:
+        print(f"Unhandled application error: {e}")
+        # Optionally show an error message box here too
+        # from tkinter import messagebox
+        # messagebox.showerror("Fatal Error", f"An unexpected error occurred: {e}")
+    finally:
+        # Attempt to close any remaining plots on exit
+        try:
+            plt.close('all')
+        except Exception:
+            pass
