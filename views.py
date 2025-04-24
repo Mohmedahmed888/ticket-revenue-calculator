@@ -344,24 +344,80 @@ class AnalyticsTab:
             # --- Plot 1: Price Distribution Pie Chart --- 
             unique_prices = sorted(list(set(prices)), reverse=True)
             price_counts = [prices.count(p) for p in unique_prices]
-            cmap = plt.get_cmap('tab10')
-            pie_colors = cmap(np.linspace(0, 1, len(price_counts)))
-            
-            wedges, texts, autotexts = self.ax1.pie(price_counts, 
-                       labels=[f"${p}" for p in unique_prices],
-                       autopct='%1.1f%%',
-                       startangle=90,
-                       pctdistance=0.85,
-                       labeldistance=1.1,
-                       colors=pie_colors,
-                       textprops={'color': text_color}) 
-            self.ax1.set_title('Price Distribution', pad=20, fontsize=12, fontweight='bold')
-            # Improve text visibility
+            total_tickets = sum(price_counts)
+
+            # Calculate revenue contribution for each price
+            revenue_per_price = [p * c for p, c in zip(unique_prices, price_counts)]
+            total_revenue = sum(revenue_per_price)
+
+            # Custom color palette that works well in both dark and light modes
+            custom_colors = ['#4B89DC',  # Soft Blue
+                            '#48CFAD',  # Mint
+                            '#AC92EC',  # Lavender
+                            '#FFCE54',  # Soft Yellow
+                            '#FC6E51',  # Coral
+                            '#ED5565']  # Soft Red
+
+            # Ensure we have enough colors
+            while len(custom_colors) < len(unique_prices):
+                custom_colors.extend(custom_colors)
+            colors = custom_colors[:len(unique_prices)]
+
+            # Create the pie chart with improved styling
+            wedges, texts, autotexts = self.ax1.pie(
+                revenue_per_price,
+                labels=[f"${p:,}" for p in unique_prices],
+                autopct=lambda pct: f'{pct:.1f}%\n(${int(total_revenue * pct/100):,})',
+                startangle=90,
+                pctdistance=0.75,
+                labeldistance=1.1,
+                colors=colors,
+                wedgeprops={'edgecolor': '#2B2B2B' if mode == 'dark' else '#FFFFFF', 
+                            'linewidth': 1.5,
+                            'alpha': 0.9}  # Slight transparency for better visibility
+            )
+
+            # Set background color based on mode
+            bg_color = '#2B2B2B' if mode == 'dark' else '#FFFFFF'
+            text_color = '#FFFFFF' if mode == 'dark' else '#2B2B2B'
+
+            self.ax1.set_title(f'Revenue Distribution by Price\nTotal Revenue: ${total_revenue:,}', 
+                               pad=20, fontsize=12, fontweight='bold',
+                               color=text_color)
+
+            # Improve text visibility and positioning
+            for text in texts:
+                text.set_color(text_color)
+                text.set_fontsize(9)
+                text.set_weight('bold')
+
             for autotext in autotexts:
-                autotext.set_color('black' if mode == 'light' else 'white') # Set contrast color
+                autotext.set_color(text_color)
+                autotext.set_fontsize(8)
                 autotext.set_weight('bold')
-                autotext.set_fontsize(9)
-                
+
+            # Add a legend with price, count, and revenue information
+            legend_labels = [f"${p:,} ({c} tickets, ${p*c:,} revenue)" 
+                            for p, c in zip(unique_prices, price_counts)]
+            legend = self.ax1.legend(
+                wedges, 
+                legend_labels, 
+                title="Price (Tickets, Revenue)",
+                loc="center left",
+                bbox_to_anchor=(1.1, 0.5),
+                fontsize=9,
+                title_fontsize=10
+            )
+
+            # Update legend colors
+            legend.get_title().set_color(text_color)
+            for text in legend.get_texts():
+                text.set_color(text_color)
+
+            # Set figure background color
+            self.fig.patch.set_facecolor(bg_color)
+            self.ax1.set_facecolor(bg_color)
+            
             # --- Plot 2: Revenue Analysis Bar Chart --- 
             avg_price = sum(prices) / len(prices) if prices else 0
             max_price = max(prices) if prices else 0
