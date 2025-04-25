@@ -1,9 +1,12 @@
 import customtkinter as ctk
+from tkinter import messagebox
 
 class CalculatorTab:
     def __init__(self, parent, app):
         self.parent = parent
         self.app = app
+        self.price_entries = []
+        self.entry_frames = []  # Store entry frames for deletion
         self.create_widgets()
     
     def create_widgets(self):
@@ -16,18 +19,22 @@ class CalculatorTab:
         input_title = ctk.CTkLabel(input_frame, text="Enter Ticket Prices", font=("Arial", 20, "bold"))
         input_title.pack(pady=10)
         
-        self.price_entries = []
-        entries_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        entries_frame.pack(fill="x", padx=20, pady=10)
+        # Frame for dynamic price entries
+        self.entries_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        self.entries_frame.pack(fill="x", padx=20, pady=10)
         
-        for row in range(3):
-            row_frame = ctk.CTkFrame(entries_frame, fg_color="transparent")
-            row_frame.pack(fill="x", pady=2)
-            row_frame.grid_columnconfigure((0,1,2), weight=1)
-            for col in range(3):
-                entry = ctk.CTkEntry(row_frame, placeholder_text=f"Price {row*3 + col + 1}", font=ctk.CTkFont(size=13), height=35)
-                entry.grid(row=0, column=col, padx=5, sticky="ew")
-                self.price_entries.append(entry)
+        # Create initial entry
+        self.add_price_entry()
+        
+        # # Add "Add Another Price" button
+        # add_button = ctk.CTkButton(
+        #     self.entries_frame, 
+        #     text="+ Add Another Price", 
+        #     font=ctk.CTkFont(size=13),
+        #     height=35,
+        #     command=self.add_price_entry
+        # )
+        # add_button.pack(fill="x", padx=5, pady=(10, 0))
         
         tickets_frame = ctk.CTkFrame(input_frame)
         tickets_frame.pack(pady=10, padx=20, fill="x")
@@ -55,7 +62,62 @@ class CalculatorTab:
         
         calculate_button = ctk.CTkButton(main_frame, text="Calculate Maximum Revenue ▶", font=("Arial", 18, "bold"), height=50, command=self.app.calculate_revenue)
         calculate_button.pack(pady=20)
-    
+
+    def add_price_entry(self):
+        """Add a new price entry field to the entries frame."""
+        entry_frame = ctk.CTkFrame(self.entries_frame, fg_color="transparent")
+        entry_frame.pack(fill="x", pady=2)
+        self.entry_frames.append(entry_frame)  # Store frame for deletion
+        
+        # Create a frame for the entry and delete button
+        entry_control_frame = ctk.CTkFrame(entry_frame, fg_color="transparent")
+        entry_control_frame.pack(fill="x", expand=True)
+        
+        # Create the entry
+        entry = ctk.CTkEntry(
+            entry_control_frame, 
+            placeholder_text=f"Price {len(self.price_entries) + 1}", 
+            font=ctk.CTkFont(size=13), 
+            height=35
+        )
+        entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        
+        # Create delete button
+        delete_button = ctk.CTkButton(
+            entry_control_frame,
+            text="×",
+            width=35,
+            height=35,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color="#ff4444",
+            hover_color="#cc0000",
+            command=lambda f=entry_frame, e=entry: self.delete_price_entry(f, e)
+        )
+        delete_button.pack(side="right")
+        
+        # Bind the entry to add a new one when typing
+        entry.bind('<Key>', lambda e, idx=len(self.price_entries): self.on_entry_type(e, idx))
+        
+        self.price_entries.append(entry)
+        return entry
+
+    def on_entry_type(self, event, entry_index):
+        """Handle typing events on price entries to add new ones when needed."""
+        # If this is the last entry and it's getting typed in, add a new one
+        if entry_index == len(self.price_entries) - 1:
+            self.add_price_entry()
+
+    def delete_price_entry(self, frame, entry):
+        """Delete a price entry field."""
+        if len(self.price_entries) > 1:  # Don't delete if it's the last entry
+            frame.destroy()
+            self.price_entries.remove(entry)
+            self.entry_frames.remove(frame)
+            
+            # Update placeholder text for remaining entries
+            for i, remaining_entry in enumerate(self.price_entries, 1):
+                remaining_entry.configure(placeholder_text=f"Price {i}")
+
     def get_inputs(self):
         """Helper method to get and validate inputs from this tab."""
         prices = []
